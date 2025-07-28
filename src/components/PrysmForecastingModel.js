@@ -57,6 +57,8 @@ const PrysmForecastingModel = () => {
     'SEAPAC': [0, 0, 0, 0, 0, 0, 600, 3000, 0, 2000, 0, 0]
   });
 
+  const [selectedRegion, setSelectedRegion] = useState('Global');
+
   const [params, setParams] = useState({
     devicePrice: 300,
     scansPerDevice: 20,
@@ -129,8 +131,8 @@ const PrysmForecastingModel = () => {
     const values = data.map(d => d[field]).filter(v => v != null);
     const min = Math.min(...values);
     const max = Math.max(...values);
-    const domainMin = Math.floor((min - 100) / 250) * 250;
-    const domainMax = Math.ceil((max + 100) / 250) * 250;
+    const domainMin = 0; // Always start at 0 for count data
+    const domainMax = Math.ceil((max + 250) / 250) * 250; // Round up to next 250
     
     const ticks = [];
     for (let i = domainMin; i <= domainMax; i += 250) {
@@ -148,9 +150,14 @@ const PrysmForecastingModel = () => {
       additionalNewLeaders: 0
     }));
 
+    // Determine which regions to process
+    const regionsToProcess = selectedRegion === 'Global' 
+      ? REGIONS 
+      : REGIONS.filter(region => region.name === selectedRegion);
+
     // First pass: calculate temporal impacts
     FORECAST_MONTHS.forEach((month, monthIndex) => {
-      REGIONS.forEach(region => {
+      regionsToProcess.forEach(region => {
         const expectedLeaders = FORECAST_DATA[month][region.name] || 0;
         const devicesAvailable = deviceSchedule[region.name][monthIndex] || 0;
 
@@ -212,7 +219,7 @@ const PrysmForecastingModel = () => {
       let totalPrysmSubRevenue = 0;
       let totalPrysmAdditionalSales = 0;
 
-      REGIONS.forEach(region => {
+      regionsToProcess.forEach(region => {
         const expectedLeaders = FORECAST_DATA[month][region.name] || 0;
         const expectedSales = SALES_DATA[month][region.name] || 0;
         const devicesAvailable = deviceSchedule[region.name][monthIndex] || 0;
@@ -283,7 +290,7 @@ const PrysmForecastingModel = () => {
         temporalSales: temporalSales / 1000000
       };
     });
-  }, [deviceSchedule, params]);
+  }, [deviceSchedule, params, selectedRegion]);
 
   const summaryMetrics = useMemo(() => {
     const deviceRevenue = forecastData.reduce((sum, month) => sum + month.prysmDeviceRevenue, 0);
@@ -314,6 +321,20 @@ const PrysmForecastingModel = () => {
     <div className="p-6 bg-gray-50 min-h-screen">
       <h1 className="text-3xl font-bold mb-6 text-gray-800">Prysm Device Launch Forecasting Model</h1>
       
+      <div className="mb-6">
+        <label className="block text-sm font-medium text-gray-700 mb-2">Filter by Region:</label>
+        <select 
+          value={selectedRegion} 
+          onChange={(e) => setSelectedRegion(e.target.value)}
+          className="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+        >
+          <option value="Global">Global (All Regions)</option>
+          {REGIONS.map(region => (
+            <option key={region.name} value={region.name}>{region.name}</option>
+          ))}
+        </select>
+      </div>
+      
       <div className="grid grid-cols-4 gap-4 mb-6">
         <div className="bg-white p-4 rounded-lg shadow">
           <h3 className="text-sm font-semibold text-gray-600">Device Revenue</h3>
@@ -343,11 +364,12 @@ const PrysmForecastingModel = () => {
                 tick={{fontSize: 12}} 
                 domain={['dataMin - 5', 'dataMax + 5']}
                 tickFormatter={formatSalesAxis}
+                width={35}
               />
               <Tooltip formatter={(value) => [`$${value.toFixed(1)}M`, '']} />
-              <Legend style={{fontSize: '12px'}} />
+              <Legend wrapperStyle={{fontSize: '8px'}} />
               <Line type="monotone" dataKey="expectedSales" stroke="#8884d8" strokeWidth={2} name="Baseline Forecast Sales" />
-              <Line type="monotone" dataKey="totalSalesWithPrysm" stroke="#82ca9d" strokeWidth={2} name="Sales with Prysm" />
+              <Line type="monotone" dataKey="totalSalesWithPrysm" stroke="#82ca9d" strokeWidth={2} name="Sales With Prysm" />
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -361,9 +383,10 @@ const PrysmForecastingModel = () => {
                 tick={{fontSize: 12}} 
                 domain={['dataMin - 500', 'dataMax + 500']}
                 tickFormatter={formatThousandsAxis}
+                width={40}
               />
               <Tooltip formatter={(value) => [`${value.toLocaleString()} leaders`, '']} />
-              <Legend style={{fontSize: '12px'}} />
+              <Legend wrapperStyle={{fontSize: '8px'}} />
               <Line type="monotone" dataKey="expectedLeaders" stroke="#8884d8" strokeWidth={2} name="Baseline SL Forecast" />
               <Line type="monotone" dataKey="totalLeadersWithPrysm" stroke="#82ca9d" strokeWidth={2} name="SL Count With Prysm" />
             </LineChart>
@@ -373,16 +396,16 @@ const PrysmForecastingModel = () => {
         <div className="bg-white p-4 rounded-lg shadow">
           <h3 className="text-lg font-semibold mb-4">New Sales Leader Counts</h3>
           <ResponsiveContainer width="100%" height={250}>
-            <LineChart data={forecastData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+            <LineChart data={forecastData}>
               <XAxis dataKey="month" tick={{fontSize: 12}} />
               <YAxis 
                 domain={generate250Ticks(forecastData, 'expectedNewLeaders').domain}
                 ticks={generate250Ticks(forecastData, 'expectedNewLeaders').ticks}
                 tick={<CustomYAxisTick />}
-                width={70}
+                width={40}
               />
               <Tooltip formatter={(value) => [`${value.toLocaleString()} new leaders`, '']} />
-              <Legend style={{fontSize: '12px'}} />
+              <Legend wrapperStyle={{fontSize: '8px'}} />
               <Line type="monotone" dataKey="expectedNewLeaders" stroke="#8884d8" strokeWidth={2} name="Baseline New SL Forecast" />
               <Line type="monotone" dataKey="totalNewLeadersWithPrysm" stroke="#82ca9d" strokeWidth={2} name="New SL Count With Prysm" />
             </LineChart>
@@ -397,9 +420,10 @@ const PrysmForecastingModel = () => {
               <YAxis 
                 tick={{fontSize: 12}}
                 tickFormatter={formatSalesAxis}
+                width={35}
               />
               <Tooltip formatter={(value) => [`${value.toFixed(1)}M`, '']} />
-              <Legend style={{fontSize: '12px'}} />
+              <Legend wrapperStyle={{fontSize: '8px'}} />
               <Line 
                 type="monotone" 
                 dataKey="totalIncrementalSales" 
@@ -417,20 +441,84 @@ const PrysmForecastingModel = () => {
             <LineChart data={forecastData}>
               <XAxis dataKey="month" tick={{fontSize: 12}} />
               <YAxis 
-                tick={{fontSize: 12}}
-                tickFormatter={formatThousandsAxis}
+                domain={generate250Ticks(forecastData.map(month => ({
+                  ...month,
+                  incrementalRetainedSLs: month.totalLeadersWithPrysm - month.expectedLeaders,
+                  incrementalNewSLs: month.totalNewLeadersWithPrysm - month.expectedNewLeaders
+                })), 'incrementalRetainedSLs').domain}
+                ticks={generate250Ticks(forecastData.map(month => ({
+                  ...month,
+                  incrementalRetainedSLs: month.totalLeadersWithPrysm - month.expectedLeaders,
+                  incrementalNewSLs: month.totalNewLeadersWithPrysm - month.expectedNewLeaders
+                })), 'incrementalRetainedSLs').ticks}
+                tick={<CustomYAxisTick />}
+                width={40}
               />
               <Tooltip formatter={(value) => [`${value.toLocaleString()} devices`, '']} />
-              <Legend style={{fontSize: '12px'}} />
+              <Legend wrapperStyle={{fontSize: '8px'}} />
               <Line type="monotone" dataKey="prysmDevicesSold" stroke="#ff7300" strokeWidth={2} name="Devices Sold" />
             </LineChart>
           </ResponsiveContainer>
         </div>
 
-        <div></div>
+        <div className="bg-white p-4 rounded-lg shadow">
+          <h3 className="text-lg font-semibold mb-4">Incremental SL's</h3>
+          <ResponsiveContainer width="100%" height={250}>
+            <LineChart data={forecastData.map(month => ({
+              ...month,
+              incrementalRetainedSLs: month.totalLeadersWithPrysm - month.expectedLeaders,
+              incrementalNewSLs: month.totalNewLeadersWithPrysm - month.expectedNewLeaders
+            }))}>
+              <XAxis dataKey="month" tick={{fontSize: 12}} />
+              <YAxis 
+                domain={generate250Ticks(forecastData.map(month => ({
+                  ...month,
+                  incrementalRetainedSLs: month.totalLeadersWithPrysm - month.expectedLeaders,
+                  incrementalNewSLs: month.totalNewLeadersWithPrysm - month.expectedNewLeaders
+                })), 'incrementalRetainedSLs').domain}
+                ticks={generate250Ticks(forecastData.map(month => ({
+                  ...month,
+                  incrementalRetainedSLs: month.totalLeadersWithPrysm - month.expectedLeaders,
+                  incrementalNewSLs: month.totalNewLeadersWithPrysm - month.expectedNewLeaders
+                })), 'incrementalRetainedSLs').ticks}
+                tick={<CustomYAxisTick />}
+                width={40}
+              />
+              <Tooltip formatter={(value) => [`${value.toLocaleString()} leaders`, '']} />
+              <Legend wrapperStyle={{fontSize: '8px'}} />
+              <Line type="monotone" dataKey="incrementalRetainedSLs" stroke="#8b5cf6" strokeWidth={2} name="Incremental Retained SLs" />
+              <Line type="monotone" dataKey="incrementalNewSLs" stroke="#f59e0b" strokeWidth={2} name="Incremental New SLs" />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-3 mb-6">
+      <div className="grid grid-cols-4 gap-3 mb-6">
+        <div className="bg-white p-3 rounded-lg shadow">
+          <h3 className="text-md font-semibold mb-3">Sales With Prysm</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse border border-gray-300 text-xs">
+              <thead>
+                <tr className="bg-gray-100">
+                  <th className="border border-gray-300 px-2 py-1 text-left">Month</th>
+                  <th className="border border-gray-300 px-2 py-1 text-center">Total ($M)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {forecastData.map((month) => (
+                  <tr key={month.month}>
+                    <td className="border border-gray-300 px-2 py-1 font-medium">{month.month}</td>
+                    <td className="border border-gray-300 px-2 py-1 text-center">${month.totalSalesWithPrysm.toFixed(1)}M</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="mt-1 text-xs text-gray-600">
+            Baseline sales + all Prysm revenue streams
+          </div>
+        </div>
+
         <div className="bg-white p-3 rounded-lg shadow">
           <h3 className="text-md font-semibold mb-3">Total Incremental Sales</h3>
           <div className="overflow-x-auto">
@@ -522,10 +610,16 @@ const PrysmForecastingModel = () => {
             </thead>
             <tbody>
               {forecastData.map((month, index) => {
-                const available = Object.values(deviceSchedule).reduce((sum, schedule) => sum + schedule[index], 0);
+                const regionsToCheck = selectedRegion === 'Global' 
+                  ? REGIONS 
+                  : REGIONS.filter(region => region.name === selectedRegion);
+                  
+                const available = selectedRegion === 'Global'
+                  ? Object.values(deviceSchedule).reduce((sum, schedule) => sum + schedule[index], 0)
+                  : deviceSchedule[selectedRegion][index];
                 
                 let totalDemand = 0;
-                REGIONS.forEach(region => {
+                regionsToCheck.forEach(region => {
                   const expectedLeaders = FORECAST_DATA[month.month][region.name] || 0;
                   const baseAdoptionRate = getAdoptionRate(region.name);
                   
@@ -696,16 +790,16 @@ const PrysmForecastingModel = () => {
             <div>
               <h4 className="text-md font-semibold mb-4 text-gray-700">Average Group Sales (USD)</h4>
               <ResponsiveContainer width="100%" height={250}>
-                <LineChart data={forecastData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                <LineChart data={forecastData}>
                   <XAxis dataKey="month" tick={{fontSize: 12}} />
                   <YAxis 
                     domain={generate250Ticks(forecastData, 'expectedGSV').domain}
                     ticks={generate250Ticks(forecastData, 'expectedGSV').ticks}
                     tick={<CustomYAxisTick />}
-                    width={70}
+                    width={40}
                   />
                   <Tooltip formatter={(value) => [`${Math.round(value).toLocaleString()} per leader`, '']} />
-                  <Legend style={{fontSize: '12px'}} />
+                      <Legend wrapperStyle={{fontSize: '8px'}} />
                   <Line type="monotone" dataKey="expectedGSV" stroke="#8884d8" strokeWidth={2} name="Expected GSV" />
                   <Line type="monotone" dataKey="averageGSVWithPrysm" stroke="#82ca9d" strokeWidth={2} name="GSV with Prysm" />
                 </LineChart>
